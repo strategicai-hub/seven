@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.env
+.venv/
+venv/
+*.log
+*.db
+data/
+
+# Arquivos de referência do n8n (contêm credenciais — nunca commitar)
+seven.json
+Follow UP seven.json
+RabbitMQ - seven.json
+CLIENTES.md
+
+# Claude Code settings locais
+.claude/
