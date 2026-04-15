@@ -185,7 +185,7 @@ async def chat_with_tools(phone: str, user_message: str, lead_name: str = "",
                 gtypes.Part.from_function_response(name=fc.name, response=result)
             )
 
-        contents.append(gtypes.Content(role="tool", parts=response_parts))
+        contents.append(gtypes.Content(role="user", parts=response_parts))
         # loop continua e o modelo reage ao function_response
 
     if final_text:
