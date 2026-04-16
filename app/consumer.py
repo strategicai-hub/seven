@@ -109,7 +109,10 @@ async def _process_message(msg: dict) -> None:
     msg_text = msg.get("msg", "")
     push_name = msg.get("push_name", "")
 
+    logger.info("[RECV] phone=%s type=%s from_me=%s", phone, msg_type, from_me)
+
     if not phone or msg_type in ("", "Unknown"):
+        logger.warning("[RECV] ignorado: phone=%r type=%r", phone, msg_type)
         return
 
     if from_me:
@@ -122,6 +125,7 @@ async def _process_message(msg: dict) -> None:
         return
 
     if _is_group(chat_id):
+        logger.warning("[RECV] ignorado grupo: chat_id=%r", chat_id)
         return
 
     # Modo mudo: após atendimento_humano, pula Gemini e responde [FINALIZADO=1] local

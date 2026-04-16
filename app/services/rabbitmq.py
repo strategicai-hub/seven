@@ -38,6 +38,7 @@ async def consume(callback: Callable[[dict], Awaitable[None]]) -> None:
             async with message.process():
                 try:
                     body = json.loads(message.body.decode())
+                    logger.info("Mensagem recebida da fila: %s", str(body)[:200])
                     await callback(body)
                 except Exception:
                     logger.exception("Erro ao processar mensagem da fila")
