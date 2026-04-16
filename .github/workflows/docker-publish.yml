@@ -31,8 +31,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/gustavocastilho-hub/seven:latest
-            ghcr.io/gustavocastilho-hub/seven:${{ github.sha }}
+            ghcr.io/strategicai-hub/seven:latest
+            ghcr.io/strategicai-hub/seven:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

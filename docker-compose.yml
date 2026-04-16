@@ -32,10 +32,12 @@ x-common-env: &common-env
   - SQLITE_PATH=${SQLITE_PATH}
   - SCHEDULER_TZ=${SCHEDULER_TZ}
   - FOLLOWUP_DRY_RUN=${FOLLOWUP_DRY_RUN}
+  - CLIENT_SLUG=${CLIENT_SLUG}
+  - CLIENT_NAME=${CLIENT_NAME}
 
 services:
   seven-api:
-    image: ghcr.io/gustavocastilho-hub/seven:latest
+    image: ghcr.io/strategicai-hub/seven:latest
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     networks:
       - network_public
@@ -57,7 +59,7 @@ services:
         - "traefik.http.services.seven.loadbalancer.server.port=8000"
 
   seven-worker:
-    image: ghcr.io/gustavocastilho-hub/seven:latest
+    image: ghcr.io/strategicai-hub/seven:latest
     command: python worker.py
     networks:
       - network_public
@@ -71,7 +73,7 @@ services:
         delay: 5s
 
   seven-scheduler:
-    image: ghcr.io/gustavocastilho-hub/seven:latest
+    image: ghcr.io/strategicai-hub/seven:latest
     command: python scheduler.py
     networks:
       - network_public
