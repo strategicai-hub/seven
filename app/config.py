@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     GOOGLE_CREDENTIALS_JSON: str = ""
     GOOGLE_SHEET_ID: str = ""
 
+    # Identidade do cliente (usada no prefixo das rotas e chaves Redis)
+    CLIENT_SLUG: str = "seven"
+    CLIENT_NAME: str = "Seven Academia"
+
     # App
     WEBHOOK_PATH: str = "/seven"
     DEBOUNCE_SECONDS: int = 30

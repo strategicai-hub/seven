@@ -1,0 +1,64 @@
+name: Register client in sai-tools
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read client identity
+        id: identity
+        run: |
+          slug=$(grep -m1 '^CLIENT_SLUG=' .env.example | cut -d= -f2)
+          name=$(grep -m1 '^CLIENT_NAME=' .env.example | cut -d= -f2)
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Register in sai-tools/clients.json
+        env:
+          SAI_TOOLS_PAT: ${{ secrets.SAI_TOOLS_PAT }}
+          SLUG: ${{ steps.identity.outputs.slug }}
+          NAME: ${{ steps.identity.outputs.name }}
+          BASE_URL: https://webhook-whatsapp.strategicai.com.br
+        run: |
+          set -e
+
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+          git clone "https://x-access-token:${SAI_TOOLS_PAT}@github.com/strategicai-hub/sai-tools.git" /tmp/sai-tools
+          cd /tmp/sai-tools
+
+          URL="${BASE_URL}/${SLUG}"
+
+          # Se já existe, não faz nada
+          if python3 -c "
+          import json, sys
+          data = json.load(open('clients.json'))
+          sys.exit(0 if any(c['url'] == '${URL}' for c in data) else 1)
+          "; then
+            echo "Cliente '${SLUG}' já registrado. Nada a fazer."
+            exit 0
+          fi
+
+          # Adiciona o novo cliente
+          python3 -c "
+          import json
+          data = json.load(open('clients.json'))
+          data.append({'name': '${NAME}', 'url': '${URL}'})
+          json.dump(data, open('clients.json', 'w'), ensure_ascii=False, indent=2)
+          print(open('clients.json').read())
+          "
+
+          git add clients.json
+          git commit -m "feat: registra ${NAME} (${SLUG}) no painel de logs"
+          git push
