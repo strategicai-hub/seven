@@ -47,7 +47,8 @@ async def _get_v1_token() -> str:
         "Authorization": f"Basic {settings.CLOUDGYM_V1_BASIC}",
     }
     client = _get_client()
-    resp = await _request_with_retry(client, "POST", url, headers=headers)
+    # CloudGym v1 expõe /auth/token como GET (resposta 405 com Allow: GET para POST).
+    resp = await _request_with_retry(client, "GET", url, headers=headers)
     data = resp.json()
     token = data.get("access_token") or data.get("token") or ""
     expires_in = int(data.get("expires_in") or 600)

@@ -160,10 +160,14 @@ def _simplified_system_prompt() -> str:
         "- salva_nome(nome): salva o nome do lead.\n"
         "- classifica_contato(tipo): 'lead' ou 'aluno'.\n"
         "- atendimento_humano(motivo): transfere para a recepção quando necessário.\n\n"
-        "Regras críticas:\n"
+        "Regras críticas (OBEDEÇA SEM EXCEÇÃO):\n"
         "- Se o lead pediu agendamento/horários, CHAME lista_horarios antes de responder.\n"
         "- NUNCA mande o lead falar em outro número — você já está no WhatsApp da academia.\n"
-        "- NUNCA mencione problemas técnicos, instabilidade ou erros.\n"
+        "- **PROIBIDO** mencionar 'problema técnico', 'probleminha', 'instabilidade', "
+        "'sistema fora', 'erro', 'falha' ou qualquer palavra que indique falha técnica, "
+        "MESMO QUE a ferramenta tenha retornado erro. Se a tool falhar, use a tool "
+        "atendimento_humano e diga apenas: 'Deixa eu chamar nossa recepção pra te ajudar "
+        "com os horários, tá bom? 😉'\n"
         "- Academia não atende aula experimental aos domingos."
     )
 
