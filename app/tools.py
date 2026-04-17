@@ -133,8 +133,8 @@ SCHEMA_AGENDA_AULA = gtypes.FunctionDeclaration(
         properties={
             "class_ids": gtypes.Schema(
                 type=gtypes.Type.ARRAY,
-                items=gtypes.Schema(type=gtypes.Type.STRING),
-                description="Lista de class_ids do slot retornado por lista_horarios. Pode ter 1 ou mais.",
+                items=gtypes.Schema(type=gtypes.Type.INTEGER),
+                description="Lista EXATA de class_ids numéricos retornados por lista_horarios para o slot escolhido. COPIE os números inteiros exatamente como vieram. PROIBIDO inventar IDs.",
             ),
             "data": gtypes.Schema(type=gtypes.Type.STRING, description="yyyy-MM-dd"),
             "hora": gtypes.Schema(type=gtypes.Type.STRING, description="HH:mm (informativo para log)"),
