@@ -484,13 +484,24 @@ async def handle_atendimento_humano(phone: str, args: dict) -> dict:
         f"Contato: {nome} ({phone})\n"
         f"Motivo: {motivo}"
     )
-    try:
-        await uazapi.send_text(settings.ALERT_PHONE, alert_text)
-    except Exception as e:
-        logger.warning("Falha ao enviar alerta de atendimento: %s", e)
+
+    alert_sent = False
+    for tentativa in range(3):
+        try:
+            await uazapi.send_text(settings.ALERT_PHONE, alert_text)
+            logger.info("Alerta de atendimento enviado com sucesso para recepção: %s", phone)
+            alert_sent = True
+            break
+        except Exception as e:
+            logger.error("Falha ao enviar alerta (tentativa %d/3): %s", tentativa + 1, e)
+            if tentativa < 2:
+                await asyncio.sleep(2)
+
+    if not alert_sent:
+        logger.critical("CRÍTICO: Alerta não foi enviado após 3 tentativas para %s", phone)
 
     await db.set_modo_mudo(phone, True)
-    return {"ok": True, "motivo": motivo}
+    return {"ok": True, "motivo": motivo, "alert_sent": alert_sent}
 
 
 HANDLERS = {
