@@ -1,31 +1,31 @@
 """
-Lembrete de vencimento de plano — executa diariamente às 09:00 (SP).
+Lembrete de vencimento de plano — roda diariamente às 08:00 (SP).
 
-Consulta CloudGym v2 listando todos os membros, filtra quem vence em 7 ou 15
-dias e envia o template fixo correspondente via Uazapi. Usa flag Redis com
-TTL 3h para evitar reenvio no mesmo dia.
+Lista todos os membros na CloudGym v2, filtra quem vence em 7 ou 15 dias e
+distribui os envios aleatoriamente na janela 08:00–09:00. Usa flag Redis
+com TTL 3h para evitar reenvio no mesmo dia.
 """
-import asyncio
 import logging
-import random
 import re
 from datetime import date
 
 from app.config import settings
-from app.services import cloudgym, uazapi
-from app.services import redis_service as rds
 from app.followups.templates import (
     PLAN_EXPIRY_7D_MENSAL,
     PLAN_EXPIRY_15D_SEMESTRAL,
     PLAN_EXPIRY_FALLBACK,
     primeiro_nome,
 )
+from app.services import cloudgym, uazapi
+from app.services import redis_service as rds
+from app.services.scheduling import distribute_over_window
 
 logger = logging.getLogger("followup.plan_expiry")
 
+SEND_WINDOW_SECONDS = 3600  # 08:00–09:00
+
 
 def _pick_template(member: dict, days: int) -> str:
-    """Escolhe o template baseado no tipo de plano e dias até o vencimento."""
     plan_name = str(member.get("planName") or member.get("plan") or "").lower()
     nome = primeiro_nome(member.get("name"))
 
@@ -38,11 +38,11 @@ def _pick_template(member: dict, days: int) -> str:
 
 def _get_phone(member: dict) -> str:
     raw = str(member.get("cellphonenumber") or member.get("phonenumber") or "")
-    phone = re.sub(r"\D", "", raw)
-    return phone
+    return re.sub(r"\D", "", raw)
 
 
-async def _send_reminder(member: dict, days: int) -> None:
+async def _send_reminder(item: tuple[dict, int]) -> None:
+    member, days = item
     phone = _get_phone(member)
     if not phone:
         return
@@ -56,19 +56,15 @@ async def _send_reminder(member: dict, days: int) -> None:
 
     if settings.FOLLOWUP_DRY_RUN:
         logger.info("[DRY_RUN][%s] %dd -> %s", phone, days, text[:120])
-    else:
-        try:
-            await uazapi.send_text(phone, text)
-        except Exception as e:
-            logger.exception("[%s] falha no envio: %s", phone, e)
-            return
+        return
+
+    try:
+        await uazapi.send_text(phone, text)
+    except Exception as e:
+        logger.exception("[%s] falha no envio: %s", phone, e)
+        return
 
     await rds.set_flag(flag_key, ttl=3 * 3600)
-
-    # Jitter 10-30min entre envios (evita rate limit / detecção)
-    wait = random.randint(600, 1800)
-    logger.info("[%s] aguardando %ds antes do próximo envio", phone, wait)
-    await asyncio.sleep(wait)
 
 
 async def run() -> None:
@@ -82,7 +78,7 @@ async def run() -> None:
 
     logger.info("plan_expiry: 7d=%d 15d=%d", len(expiring_7), len(expiring_15))
 
-    for m in expiring_7:
-        await _send_reminder(m, 7)
-    for m in expiring_15:
-        await _send_reminder(m, 15)
+    items: list[tuple[dict, int]] = [(m, 7) for m in expiring_7] + [(m, 15) for m in expiring_15]
+    await distribute_over_window(
+        items, _send_reminder, window_seconds=SEND_WINDOW_SECONDS, label="plan_expiry"
+    )

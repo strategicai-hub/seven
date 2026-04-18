@@ -1,6 +1,12 @@
 """
-Scheduler: executa os 4 jobs de follow-up (reativação IA, vencimento de plano,
-aniversário, pós-aula D+1) via APScheduler.
+Scheduler: executa os jobs de follow-up (reativação IA, vencimento de plano,
+aniversário, pós-aula D+1, ausentes >3d) via APScheduler.
+
+Todos os jobs diários (menos o `reactivation`, que já roda a cada minuto)
+disparam às 08:00 SP. Cada um distribui os envios internamente em janela
+aleatória de 1h (08:00–09:00) via `app.services.scheduling.distribute_over_window`.
+
+`absent` só roda seg-sex — os demais rodam todos os dias.
 """
 import asyncio
 import logging
@@ -10,7 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.config import settings
 from app.db import init_db
-from app.followups import reactivation, plan_expiry, birthday, post_trial
+from app.followups import reactivation, plan_expiry, birthday, post_trial, absent
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,22 +40,29 @@ async def main() -> None:
     )
     scheduler.add_job(
         plan_expiry.run,
-        CronTrigger(hour=9, minute=0, timezone=tz),
+        CronTrigger(hour=8, minute=0, timezone=tz),
         id="plan_expiry",
         max_instances=1,
         coalesce=True,
     )
     scheduler.add_job(
         birthday.run,
-        CronTrigger(hour=9, minute=7, timezone=tz),
+        CronTrigger(hour=8, minute=0, timezone=tz),
         id="birthday",
         max_instances=1,
         coalesce=True,
     )
     scheduler.add_job(
         post_trial.run,
-        CronTrigger(hour=9, minute=4, timezone=tz),
+        CronTrigger(hour=8, minute=0, timezone=tz),
         id="post_trial",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        absent.run,
+        CronTrigger(day_of_week="mon-fri", hour=8, minute=0, timezone=tz),
+        id="absent",
         max_instances=1,
         coalesce=True,
     )

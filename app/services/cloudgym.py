@@ -31,6 +31,12 @@ _client: httpx.AsyncClient | None = None
 # até o expiry, evitando bater em /auth/token a cada chamada.
 _mem_token_cache: dict[str, tuple[str, float]] = {}
 
+# Locks para single-flight no fetch de token. Sem isso, quando várias corotinas
+# entram em paralelo com cache vazio, todas disparam /auth/token ao mesmo tempo
+# e a CloudGym pode responder 429.
+_v1_token_lock = asyncio.Lock()
+_v2_token_lock = asyncio.Lock()
+
 
 def _get_client() -> httpx.AsyncClient:
     global _client
@@ -69,20 +75,25 @@ async def _get_v1_token() -> str:
     if cached:
         return cached
 
-    url = f"{settings.CLOUDGYM_V1_BASE}/auth/token"
-    headers = {
-        "accept": "*/*",
-        "Authorization": f"Basic {settings.CLOUDGYM_V1_BASIC}",
-    }
-    client = _get_client()
-    # CloudGym v1 expõe /auth/token como GET (resposta 405 com Allow: GET para POST).
-    resp = await _request_with_retry(client, "GET", url, headers=headers)
-    data = resp.json()
-    token = data.get("access_token") or data.get("token") or ""
-    expires_in = int(data.get("expires_in") or 600)
-    if token:
-        await _cache_set(_V1_TOKEN_KEY, token, ttl=max(60, expires_in - 30))
-    return token
+    async with _v1_token_lock:
+        cached = await _cache_get(_V1_TOKEN_KEY)
+        if cached:
+            return cached
+
+        url = f"{settings.CLOUDGYM_V1_BASE}/auth/token"
+        headers = {
+            "accept": "*/*",
+            "Authorization": f"Basic {settings.CLOUDGYM_V1_BASIC}",
+        }
+        client = _get_client()
+        # CloudGym v1 expõe /auth/token como GET (resposta 405 com Allow: GET para POST).
+        resp = await _request_with_retry(client, "GET", url, headers=headers)
+        data = resp.json()
+        token = data.get("access_token") or data.get("token") or ""
+        expires_in = int(data.get("expires_in") or 600)
+        if token:
+            await _cache_set(_V1_TOKEN_KEY, token, ttl=max(60, expires_in - 30))
+        return token
 
 
 async def _get_v2_token() -> str:
@@ -90,19 +101,24 @@ async def _get_v2_token() -> str:
     if cached:
         return cached
 
-    # CloudGym v2: POST /auth com Basic Auth (username/password como credenciais HTTP Basic),
-    # corpo vazio. Resposta: {"success": true, "accessToken": "..."}.
-    url = f"{settings.CLOUDGYM_V2_BASE}/auth"
-    client = _get_client()
-    resp = await _request_with_retry(
-        client, "POST", url, auth=(settings.CLOUDGYM_V2_USERNAME, settings.CLOUDGYM_V2_PASSWORD)
-    )
-    data = resp.json()
-    token = data.get("accessToken") or data.get("token") or data.get("access_token") or ""
-    expires_in = int(data.get("expires_in") or 3600)
-    if token:
-        await _cache_set(_V2_TOKEN_KEY, token, ttl=max(60, expires_in - 30))
-    return token
+    async with _v2_token_lock:
+        cached = await _cache_get(_V2_TOKEN_KEY)
+        if cached:
+            return cached
+
+        # CloudGym v2: POST /auth com Basic Auth (username/password como credenciais HTTP Basic),
+        # corpo vazio. Resposta: {"success": true, "accessToken": "..."}.
+        url = f"{settings.CLOUDGYM_V2_BASE}/auth"
+        client = _get_client()
+        resp = await _request_with_retry(
+            client, "POST", url, auth=(settings.CLOUDGYM_V2_USERNAME, settings.CLOUDGYM_V2_PASSWORD)
+        )
+        data = resp.json()
+        token = data.get("accessToken") or data.get("token") or data.get("access_token") or ""
+        expires_in = int(data.get("expires_in") or 3600)
+        if token:
+            await _cache_set(_V2_TOKEN_KEY, token, ttl=max(60, expires_in - 30))
+        return token
 
 
 async def _request_with_retry(
@@ -288,6 +304,23 @@ def _parse_date(value: str) -> Optional[date]:
         except ValueError:
             continue
     return None
+
+
+async def get_member_attendance(
+    member_id: int | str, size: int = 1, sort: str = "date,desc"
+) -> list[dict]:
+    """Histórico de presença (aulas + musculação) de um membro.
+
+    Endpoint v1: GET /customer/attendance/{memberId}?size=&page=&sort=
+    Para pegar só a última presença, use size=1 e sort="date,desc".
+    """
+    data = await _v1_get(
+        f"/customer/attendance/{member_id}",
+        params={"size": size, "page": 0, "sort": sort},
+    )
+    if isinstance(data, list):
+        return data
+    return data.get("content") or data.get("items") or data.get("data") or []
 
 
 async def list_members_expiring(days_before: int, reference: Optional[date] = None) -> list[dict]:
