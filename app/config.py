@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     # Whitelist de números: vazio = responde a todos
     ALLOWED_PHONES: str = ""
 
+    # Números que pulam o debounce (CSV de dígitos). Usado para números de teste
+    # em que queremos resposta imediata.
+    DEBOUNCE_BYPASS_PHONES: str = ""
+
     # SQLite
     SQLITE_PATH: str = "/data/seven.db"
 
@@ -74,6 +78,10 @@ class Settings(BaseSettings):
     @property
     def allowed_phones_list(self) -> list[str]:
         return [p.strip() for p in self.ALLOWED_PHONES.split(",") if p.strip()]
+
+    @property
+    def debounce_bypass_phones_set(self) -> set[str]:
+        return {p.strip() for p in self.DEBOUNCE_BYPASS_PHONES.split(",") if p.strip()}
 
     @property
     def rabbitmq_url(self) -> str:

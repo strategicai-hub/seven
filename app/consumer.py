@@ -31,7 +31,6 @@ from app.tools import handle_atendimento_humano
 logger = logging.getLogger(__name__)
 
 TEXT_TYPES = {"ExtendedTextMessage", "Conversation", "ContactMessage", "ReactionMessage"}
-DEBOUNCE_BYPASS = {"5511989887525"}
 
 _LOG_KEY = "seven:logs"
 try:
@@ -220,7 +219,7 @@ async def _process_message(msg: dict) -> None:
         logger.info("Buffer já ativo para %s (count=%d)", phone, count)
         return
 
-    if phone not in DEBOUNCE_BYPASS:
+    if phone not in settings.debounce_bypass_phones_set:
         await asyncio.sleep(settings.DEBOUNCE_SECONDS)
 
     messages = await rds.get_buffer(phone)
