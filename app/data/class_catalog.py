@@ -103,19 +103,62 @@ API_NAME: dict[str, str] = {
     "seven_mais_bike": "SEVEN MAIS",
 }
 
-# Weekdays (0=seg, 6=dom) em que cada modalidade roda. Fonte: grade oficial
-# listada em app/prompt.py (CATALOGO_HORARIOS). Usado como hard-filter em
-# lista_horarios — se o dia pedido não bater, a tool retorna erro sem bater na API.
-WEEKDAYS_BY_MODALITY: dict[str, set[int]] = {
-    "seven_cross": {0, 2, 4},              # Seg, Qua, Sex
-    "muay_thai": {0, 1, 2, 3},             # Seg, Ter, Qua, Qui
-    "muay_thai_kids": {0, 2},              # Seg, Qua
-    "fitdance": {0, 1, 2, 3},              # Seg, Ter, Qua, Qui
-    "bike_move": {1, 3, 4},                # Ter, Qui, Sex
-    "seven_bike": {0, 1, 2, 3, 4},         # Seg-Sex
-    "seven_pump": {0, 1, 2, 3, 4},         # Seg-Sex
-    "seven_mais_bike": {5},                # Sábado (Seven Mais)
+# Grade OFICIAL da Academia Seven — fonte da verdade. Allowlist de aulas que
+# podem ser oferecidas/agendadas. Fonte: admin CloudGym (screenshot 2026-04-23).
+#
+# Por que existe: CloudGym `/config/classes` marca cada classe como rodando em
+# Seg/Ter/Qua/Qui indiscriminadamente (campo `days` noisy). Sem allowlist, a
+# Zoe oferecia Muay Thai 06:00 na Segunda (só roda Ter/Qui) e coisas parecidas.
+# Aulas fora desta grade NÃO são surfaced em `lista_horarios`.
+GRADE_OFICIAL: dict[tuple[str, int], set[str]] = {
+    ("seven_cross", 0): {"06:00", "16:15", "18:30"},
+    ("seven_cross", 2): {"06:00", "16:15", "18:30"},
+    ("seven_cross", 4): {"06:00", "16:15", "18:30"},
+
+    ("seven_bike", 0): {"07:00", "18:30"},
+    ("seven_bike", 1): {"06:00", "08:15", "17:15"},
+    ("seven_bike", 2): {"07:00", "18:30"},
+    ("seven_bike", 3): {"06:00", "08:15", "17:15"},
+    ("seven_bike", 4): {"07:00"},
+
+    ("seven_pump", 0): {"08:15", "17:15"},
+    ("seven_pump", 1): {"07:00", "18:30"},
+    ("seven_pump", 2): {"08:15", "17:15"},
+    ("seven_pump", 3): {"07:00", "18:30"},
+    ("seven_pump", 4): {"08:15", "17:15"},
+
+    ("muay_thai", 0): {"08:00", "15:00", "19:00"},
+    ("muay_thai", 1): {"06:00", "17:15", "18:15"},
+    ("muay_thai", 2): {"08:00", "15:00", "19:00"},
+    ("muay_thai", 3): {"06:00", "17:15", "18:15"},
+
+    ("muay_thai_kids", 0): {"18:00"},
+    ("muay_thai_kids", 2): {"18:00"},
+
+    ("fitdance", 0): {"20:00"},
+    ("fitdance", 1): {"17:00"},
+    ("fitdance", 2): {"20:00"},
+    ("fitdance", 3): {"17:00"},
+
+    ("bike_move", 1): {"19:30"},
+    ("bike_move", 3): {"19:30"},
+    ("bike_move", 4): {"18:30"},
 }
+
+# Derivado de GRADE_OFICIAL — dias em que cada modalidade roda. Usado como
+# hard-filter em lista_horarios (fail fast sem bater na API).
+WEEKDAYS_BY_MODALITY: dict[str, set[int]] = {
+    canon: {wd for (c, wd) in GRADE_OFICIAL if c == canon}
+    for canon in {c for (c, _) in GRADE_OFICIAL}
+}
+# Seven Mais (programa para 3ª idade) — sábado; sem slot coletivo no CloudGym
+# mas mantido pra compatibilidade com `resolve_modality`.
+WEEKDAYS_BY_MODALITY["seven_mais_bike"] = {5}
+
+
+def slots_for_weekday(canon: str, weekday: int) -> set[str]:
+    """Horas HH:mm oficiais para (modalidade_canon, weekday). Vazio se não existe."""
+    return GRADE_OFICIAL.get((canon, weekday), set())
 
 
 # ---------------- Discovery (ID → modalidade, weekday, hora) ----------------

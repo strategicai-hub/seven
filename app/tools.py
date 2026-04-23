@@ -308,26 +308,20 @@ def _hhmm(t: str | None) -> str:
     return str(t)[:5]  # "06:00:00" -> "06:00"
 
 
-async def _count_reservations(data_str: str, class_id: int) -> int:
-    """Retorna len(attendancelist) para (class_id, data). 0 se vazio/erro."""
-    try:
-        r = await cloudgym.get_class_availability(data_str, str(class_id))
-    except Exception:
-        return 0
-    items = r if isinstance(r, list) else (r.get("items") or [])
-    return len(items)
-
-
 async def handle_lista_horarios(phone: str, args: dict) -> dict:
-    """Consulta /config/classes (cached), agrupa por horário e retorna até 3 slots.
+    """Consulta /config/classes (cached), cruza com a grade oficial e retorna
+    até 3 slots que REALMENTE rodam no dia pedido.
 
     Fluxo:
     1. Valida weekday contra WEEKDAYS_BY_MODALITY (fail fast, sem bater na API).
     2. Carrega catálogo (1 chamada HTTP, cache 1h).
     3. Filtra por nome da modalidade (campo `name`).
-    4. Agrupa por `time` — cada slot pode ter múltiplos class_ids (um por dia da semana).
-    5. Filtra slots em passado ou <30min no futuro.
-    6. Retorna até 3 slots com {hora, class_ids, capacity, vagas}.
+    4. Agrupa por `time` — cada slot pode ter múltiplos class_ids.
+    5. Aplica GRADE_OFICIAL — descarta horas que não existem nessa (modalidade, weekday).
+       CloudGym devolve `days` ruidoso (marca Seg/Ter/Qua/Qui em tudo), então o
+       allowlist da grade é a fonte da verdade.
+    6. Filtra slots em passado ou <30min no futuro.
+    7. Retorna até 3 slots com {hora, class_ids}.
     """
     modalidade = (args.get("modalidade") or "").strip()
     data_str = (args.get("data") or "").strip()
@@ -403,11 +397,25 @@ async def handle_lista_horarios(phone: str, args: dict) -> dict:
     by_time: dict[str, dict] = {}
     for c in aulas:
         hora = _hhmm(c.get("time"))
-        cap = int(c.get("capacity") or 0)
-        entry = by_time.setdefault(hora, {"hora": hora, "class_ids": [], "capacity": cap})
+        entry = by_time.setdefault(hora, {"hora": hora, "class_ids": []})
         entry["class_ids"].append(int(c["id"]))
-        # capacity pode variar entre IDs do mesmo horário — pega o maior
-        entry["capacity"] = max(entry["capacity"], cap)
+
+    # Allowlist — só sobrevivem horas que de fato rodam nessa (modalidade, weekday).
+    allowed_horas = catalog.slots_for_weekday(canon, target_wd)
+    if not allowed_horas:
+        return {
+            "ok": False,
+            "error": "dia_sem_aula",
+            "modalidade": catalog.DISPLAY_NAME.get(canon, canon),
+            "mensagem_tecnica": f"{catalog.DISPLAY_NAME.get(canon, canon)} não roda em {data_str}.",
+        }
+    phantom = [h for h in by_time if h not in allowed_horas]
+    if phantom:
+        logger.info(
+            "[lista_horarios] %s em %s: descartadas %d horas fora da grade oficial (%s)",
+            modalidade, data_str, len(phantom), phantom,
+        )
+    by_time = {h: info for h, info in by_time.items() if h in allowed_horas}
 
     # Filtro de segurança: descarta aulas em passado ou <30min à frente
     now = datetime.now()
@@ -425,16 +433,6 @@ async def handle_lista_horarios(phone: str, args: dict) -> dict:
     # Ordena por hora e limita a 3
     slots.sort(key=lambda s: _parse_time(s["hora"]) or (99, 99))
     slots = slots[:3]
-
-    # Consulta reservas em paralelo (usa só o primeiro class_id de cada grupo — economiza requests)
-    reservas = await asyncio.gather(
-        *[_count_reservations(data_str, s["class_ids"][0]) for s in slots],
-        return_exceptions=True,
-    )
-    for s, r in zip(slots, reservas):
-        cap = s.get("capacity", 0)
-        reservados = r if isinstance(r, int) else 0
-        s["vagas"] = max(0, cap - reservados) if cap else None
 
     return {
         "ok": True,
