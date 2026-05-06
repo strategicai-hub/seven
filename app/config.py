@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     # Whitelist de números: vazio = responde a todos
     ALLOWED_PHONES: str = ""
 
+    # Blocklist de números: mensagens desses números são descartadas antes da fila
+    BLOCKED_SENDER_PHONES: str = ""
+
     # Números que pulam o debounce (CSV de dígitos). Usado para números de teste
     # em que queremos resposta imediata.
     DEBOUNCE_BYPASS_PHONES: str = ""
@@ -78,6 +81,10 @@ class Settings(BaseSettings):
     @property
     def allowed_phones_list(self) -> list[str]:
         return [p.strip() for p in self.ALLOWED_PHONES.split(",") if p.strip()]
+
+    @property
+    def blocked_sender_phones_set(self) -> set[str]:
+        return {p.strip() for p in self.BLOCKED_SENDER_PHONES.split(",") if p.strip()}
 
     @property
     def debounce_bypass_phones_set(self) -> set[str]:
