@@ -27,9 +27,15 @@ async def webhook(request: Request):
 
     from_me = msg.get("fromMe", False)
 
-    raw_sender = msg.get("sender_pn") or msg.get("chatid") or msg.get("sender", "")
+    # Quando fromMe=True (atendente humano enviou pelo WhatsApp Web/celular),
+    # sender_pn é o número DA EMPRESA e chatid é o do LEAD (destinatário).
+    # Precisamos do número do lead para bloquear a Zoe corretamente.
+    if from_me:
+        raw_sender = msg.get("chatid") or msg.get("sender_pn") or msg.get("sender", "")
+    else:
+        raw_sender = msg.get("sender_pn") or msg.get("chatid") or msg.get("sender", "")
     phone = raw_sender.split("@")[0] if raw_sender else ""
-    chat_id = raw_sender
+    chat_id = msg.get("chatid") or raw_sender
     push_name = msg.get("senderName", "")
 
     text = msg.get("text", "")
