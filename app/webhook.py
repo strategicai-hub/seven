@@ -82,13 +82,14 @@ async def webhook(request: Request):
         logger.info("Mensagem de %s ignorada (fora da whitelist ALLOWED_PHONES)", phone)
         return {"status": "ignored", "reason": "phone not in whitelist"}
 
-    # /reset instantâneo — processa antes da fila para não esperar debounce
+    # /reset instantâneo — processa antes da fila para não esperar debounce.
+    # Apaga TUDO relacionado ao número: histórico, buffer, bloqueio humano,
+    # alertas, dedups de follow-up e a row do SQLite (nome, modo_mudo, status,
+    # follow-up, dia_aula).
     text_normalized = (text or "").strip().lower()
     if text_normalized == "/reset":
-        await rds.clear_chat_history(phone)
-        await db.upsert_lead(phone, nome=None, modo_mudo=0, status_conversa="novo",
-                             next_follow_up=None, stage_follow_up=0, dia_aula=None)
-        await rds.delete_buffer(phone)
+        await rds.reset_lead_state(phone)
+        await db.delete_lead(phone)
         try:
             await uazapi.send_text(phone, "Conversa reiniciada.")
         except Exception as e:

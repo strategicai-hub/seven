@@ -102,6 +102,22 @@ async def clear_chat_history(phone: str) -> None:
     await r.delete(_history_key(phone))
 
 
+async def reset_lead_state(phone: str) -> None:
+    """Apaga TODAS as chaves Redis relacionadas ao lead — usado pelo /reset.
+    Inclui: histórico, buffer, bloqueio humano, flag de alerta, e dedups
+    de follow-up (aniversário e plano expirando)."""
+    r = await get_redis()
+    base = _base_key(phone)
+    await r.delete(
+        _history_key(phone),
+        _buffer_key(phone),
+        f"{base}:block",
+        f"{base}:alert",
+        f"aniv_seven:{phone}",
+        f"lembrete_seven:{phone}",
+    )
+
+
 async def pop_last_history(phone: str, n: int = 1) -> None:
     """Remove as últimas `n` entradas do histórico. Usado no abort para
     descartar user+model registrados numa chamada Gemini cuja resposta
