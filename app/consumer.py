@@ -30,7 +30,7 @@ from app.tools import handle_atendimento_humano
 
 logger = logging.getLogger(__name__)
 
-TEXT_TYPES = {"ExtendedTextMessage", "Conversation", "ContactMessage", "ReactionMessage"}
+TEXT_TYPES = {"ExtendedTextMessage", "Conversation", "ContactMessage"}
 
 _LOG_KEY = "seven:logs"
 try:
@@ -184,6 +184,12 @@ async def _process_message(msg: dict) -> None:
     messageid = msg.get("messageid", "")
     if msg_type in TEXT_TYPES:
         buffer_text = msg_text
+    elif msg_type == "ReactionMessage":
+        # Enriquecemos o emoji com contexto explícito — o Gemini diferencia
+        # 🙏/❤️/👍 mas precisa saber que é uma reação ao último envio dele,
+        # não uma mensagem nova solta.
+        emoji = (msg_text or "").strip() or "(sem emoji)"
+        buffer_text = f"[Reação do lead ao último envio: {emoji}]"
     elif msg_type == "AudioMessage":
         log(f"[AUDIO] transcribe_audio(phone={phone})")
         try:

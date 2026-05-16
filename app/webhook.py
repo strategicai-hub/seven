@@ -42,7 +42,14 @@ async def webhook(request: Request):
     msg_type_raw = msg.get("messageType", "")
     msg_type_norm = msg_type_raw.lower() if msg_type_raw else ""
 
-    if text:
+    # Reaction detectada antes do text bruto — UAZAPI entrega o emoji em `text`,
+    # e sem este branch a reação viraria uma "Conversation" qualquer (bug que
+    # disparou nova abertura de conversa enquanto humano atendia).
+    if msg_type_norm == "reactionmessage" or "reactionMessage" in msg:
+        msg_type = "ReactionMessage"
+        media_url = ""
+        caption = ""
+    elif text:
         msg_type = "Conversation"
         media_url = ""
         caption = ""

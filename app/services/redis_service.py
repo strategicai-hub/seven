@@ -1,4 +1,7 @@
 import json
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 import redis.asyncio as redis
 
 from app.config import settings
@@ -17,11 +20,19 @@ def _base_key(phone: str) -> str:
     return f"{phone}--seven"
 
 
+def _block_ttl_seconds() -> int:
+    # Bloqueio expira amanhã às 08:00 SP — Zoe só volta no dia seguinte.
+    tz = ZoneInfo("America/Sao_Paulo")
+    now = datetime.now(tz)
+    target = (now + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+    return max(int((target - now).total_seconds()), 60)
+
+
 # ---- bloqueio de agente ----
 
-async def set_block(phone: str, ttl: int = settings.BLOCK_TTL_SECONDS) -> None:
+async def set_block(phone: str, ttl: int | None = None) -> None:
     r = await get_redis()
-    await r.set(f"{_base_key(phone)}:block", "1", ex=ttl)
+    await r.set(f"{_base_key(phone)}:block", "1", ex=ttl or _block_ttl_seconds())
 
 
 async def is_blocked(phone: str) -> bool:
