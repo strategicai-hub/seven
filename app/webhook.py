@@ -40,16 +40,17 @@ async def webhook(request: Request):
 
     text = msg.get("text", "")
     msg_type_raw = msg.get("messageType", "")
+    msg_type_norm = msg_type_raw.lower() if msg_type_raw else ""
 
     if text:
         msg_type = "Conversation"
         media_url = ""
         caption = ""
-    elif msg_type_raw == "audioMessage" or "audioMessage" in msg:
+    elif msg_type_norm == "audiomessage" or "audioMessage" in msg:
         msg_type = "AudioMessage"
         media_url = msg.get("mediaUrl") or msg.get("url", "")
         caption = ""
-    elif msg_type_raw == "imageMessage" or "imageMessage" in msg:
+    elif msg_type_norm == "imagemessage" or "imageMessage" in msg:
         msg_type = "ImageMessage"
         media_url = msg.get("mediaUrl") or msg.get("url", "")
         caption = msg.get("caption", "")
