@@ -75,9 +75,15 @@ async def download_media_by_id(messageid: str) -> bytes:
     resp = await client.post(url, content=_json_body(payload), headers=_headers())
     resp.raise_for_status()
     data = resp.json()
-    b64 = data.get("base64") or data.get("fileBase64") or data.get("data") or ""
+    b64 = data.get("base64Data") or ""
     if "," in b64:
         b64 = b64.split(",", 1)[1]
-    if not b64:
-        raise RuntimeError(f"resposta sem base64: keys={list(data.keys())}")
-    return base64.b64decode(b64)
+    if b64:
+        return base64.b64decode(b64)
+    # Fallback: alguns retornos podem trazer só fileURL (sem base64).
+    file_url = data.get("fileURL") or ""
+    if file_url:
+        r = await client.get(file_url, headers=_headers())
+        r.raise_for_status()
+        return r.content
+    raise RuntimeError(f"resposta sem base64Data nem fileURL: keys={list(data.keys())}")
