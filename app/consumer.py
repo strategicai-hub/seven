@@ -181,6 +181,7 @@ async def _process_message(msg: dict) -> None:
         lead = await db.get_lead(phone) or {}
 
     media_url = msg.get("media_url", "")
+    messageid = msg.get("messageid", "")
     if msg_type in TEXT_TYPES:
         buffer_text = msg_text
     elif msg_type == "AudioMessage":
@@ -188,12 +189,17 @@ async def _process_message(msg: dict) -> None:
         try:
             if media_url:
                 audio_bytes = await uazapi.download_media(media_url)
+            elif messageid:
+                audio_bytes = await uazapi.download_media_by_id(messageid)
+            else:
+                audio_bytes = None
+            if audio_bytes:
                 transcription = await transcribe_audio(audio_bytes)
                 buffer_text = f"[Áudio transcrito]: {transcription}"
                 log(_ok(f"[AUDIO] transcrito ({len(transcription)} chars)"))
             else:
-                buffer_text = "[Áudio recebido — sem URL]"
-                log(_warn(f"[AUDIO] sem media_url"))
+                buffer_text = "[Áudio recebido — sem URL nem messageid]"
+                log(_warn(f"[AUDIO] sem media_url nem messageid"))
         except Exception as e:
             log(_err(f"[AUDIO] {e}"))
             buffer_text = "[Áudio recebido — erro na transcrição]"
@@ -203,13 +209,18 @@ async def _process_message(msg: dict) -> None:
             caption = msg.get("caption", "")
             if media_url:
                 image_bytes = await uazapi.download_media(media_url)
+            elif messageid:
+                image_bytes = await uazapi.download_media_by_id(messageid)
+            else:
+                image_bytes = None
+            if image_bytes:
                 description = await analyze_image(image_bytes)
                 buffer_text = f"[Imagem recebida]: {description}"
                 if caption:
                     buffer_text += f"\nLegenda: {caption}"
                 log(_ok(f"[IMG] analisada"))
             else:
-                buffer_text = "[Imagem recebida — sem URL]"
+                buffer_text = "[Imagem recebida — sem URL nem messageid]"
         except Exception as e:
             log(_err(f"[IMG] {e}"))
             buffer_text = "[Imagem recebida — erro na análise]"

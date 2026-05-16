@@ -97,6 +97,7 @@ async def webhook(request: Request):
         "msg": text,
         "chat_id": chat_id,
         "media_url": media_url,
+        "messageid": msg.get("messageid") or msg.get("id", ""),
         "caption": caption,
         "raw_message": msg,
     }

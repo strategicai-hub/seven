@@ -1,3 +1,4 @@
+import base64
 import json as _json
 import logging
 
@@ -65,3 +66,18 @@ async def download_media(media_url: str) -> bytes:
     resp = await client.get(media_url, headers=_headers())
     resp.raise_for_status()
     return resp.content
+
+
+async def download_media_by_id(messageid: str) -> bytes:
+    url = f"{settings.UAZAPI_BASE_URL}/message/download"
+    payload = {"id": messageid, "return_base64": "true"}
+    client = _get_client()
+    resp = await client.post(url, content=_json_body(payload), headers=_headers())
+    resp.raise_for_status()
+    data = resp.json()
+    b64 = data.get("base64") or data.get("fileBase64") or data.get("data") or ""
+    if "," in b64:
+        b64 = b64.split(",", 1)[1]
+    if not b64:
+        raise RuntimeError(f"resposta sem base64: keys={list(data.keys())}")
+    return base64.b64decode(b64)
