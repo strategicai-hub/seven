@@ -107,8 +107,15 @@ async def is_modo_mudo(phone: str) -> bool:
 
 
 async def set_dia_aula(phone: str, dia_aula_str: str) -> None:
-    """dia_aula_str no formato dd/MM/yyyy."""
-    await upsert_lead(phone, dia_aula=dia_aula_str)
+    """dia_aula_str no formato dd/MM/yyyy. Marca o lead como `agendado` e
+    desliga o follow-up de reativação — quem tem aula marcada não deve ser
+    reativado como lead frio."""
+    await upsert_lead(
+        phone,
+        dia_aula=dia_aula_str,
+        status_conversa="agendado",
+        next_follow_up=None,
+    )
 
 
 async def schedule_followup(phone: str, next_follow_up_iso: str, stage: int = 1) -> None:
@@ -121,6 +128,10 @@ async def schedule_followup(phone: str, next_follow_up_iso: str, stage: int = 1)
 
 
 async def get_followups_due(now_iso: str) -> list[dict]:
+    """Leads devidos para reativação. Bloqueia quem está com `agendado` ou
+    `finalizado`, e tambem quem tem `dia_aula` >= hoje (formato dd/MM/yyyy
+    convertido pra yyyy-MM-dd pra comparar com a data de hoje em ISO)."""
+    today_iso_date = now_iso[:10]  # 'YYYY-MM-DD'
     async with aiosqlite.connect(settings.SQLITE_PATH) as db:
         db.row_factory = aiosqlite.Row
         cur = await db.execute(
@@ -128,10 +139,14 @@ async def get_followups_due(now_iso: str) -> list[dict]:
             SELECT * FROM leads
             WHERE next_follow_up IS NOT NULL
               AND next_follow_up <= ?
-              AND COALESCE(status_conversa, '') != 'finalizado'
+              AND COALESCE(status_conversa, '') NOT IN ('finalizado', 'agendado')
               AND COALESCE(modo_mudo, 0) = 0
+              AND (
+                  dia_aula IS NULL
+                  OR (substr(dia_aula,7,4)||'-'||substr(dia_aula,4,2)||'-'||substr(dia_aula,1,2)) < ?
+              )
             """,
-            (now_iso,),
+            (now_iso, today_iso_date),
         )
         rows = await cur.fetchall()
         return [dict(r) for r in rows]

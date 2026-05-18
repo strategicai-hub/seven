@@ -33,7 +33,7 @@ async def main() -> None:
 
     scheduler.add_job(
         reactivation.run,
-        CronTrigger(day_of_week="mon-fri", minute="*", timezone=tz),
+        CronTrigger(day_of_week="mon-fri", hour="9-18", minute="*/15", timezone=tz),
         id="reactivation",
         max_instances=1,
         coalesce=True,
