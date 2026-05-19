@@ -1,4 +1,5 @@
 import json
+import hashlib
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -39,6 +40,33 @@ async def is_blocked(phone: str) -> bool:
     r = await get_redis()
     return await r.exists(f"{_base_key(phone)}:block") == 1
 
+
+
+
+# ---- ecos de mensagens enviadas pela propria API ----
+
+def _outbound_digest(text: str) -> str:
+    normalized = (text or "").strip()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
+
+
+def _outbound_echo_key(phone: str, digest: str) -> str:
+    return f"{_base_key(phone)}:outbound:{digest}"
+
+
+async def mark_outbound_echo(phone: str, text: str, ttl: int = 120) -> None:
+    if not phone or not text:
+        return
+    r = await get_redis()
+    await r.set(_outbound_echo_key(phone, _outbound_digest(text)), "1", ex=ttl)
+
+
+async def consume_outbound_echo(phone: str, text: str) -> bool:
+    if not phone or not text:
+        return False
+    r = await get_redis()
+    deleted = await r.delete(_outbound_echo_key(phone, _outbound_digest(text)))
+    return deleted == 1
 
 # ---- buffer de mensagens (debounce) ----
 
