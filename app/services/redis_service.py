@@ -31,14 +31,33 @@ def _block_ttl_seconds() -> int:
 
 # ---- bloqueio de agente ----
 
-async def set_block(phone: str, ttl: int | None = None) -> None:
+async def set_block(phone: str, ttl: int | None = None, reason: str = "human") -> None:
     r = await get_redis()
-    await r.set(f"{_base_key(phone)}:block", "1", ex=ttl or _block_ttl_seconds())
+    await r.set(f"{_base_key(phone)}:block", reason or "human", ex=ttl or _block_ttl_seconds())
 
 
 async def is_blocked(phone: str) -> bool:
     r = await get_redis()
     return await r.exists(f"{_base_key(phone)}:block") == 1
+
+
+
+async def clear_stale_legacy_block(phone: str) -> bool:
+    """Remove bloqueio antigo deixado por eco do /reset."""
+    r = await get_redis()
+    base = _base_key(phone)
+    block_key = f"{base}:block"
+    value = await r.get(block_key)
+    if value != "1":
+        return False
+
+    has_history = await r.llen(_history_key(phone)) > 0
+    has_buffer = await r.exists(_buffer_key(phone)) == 1
+    if has_history or has_buffer:
+        return False
+
+    await r.delete(block_key)
+    return True
 
 
 

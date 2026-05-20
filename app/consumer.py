@@ -53,6 +53,12 @@ def _strip_html(t: str) -> str:
     return re.sub(r"<[^>]+>", "", t)
 
 
+
+def _is_reset_confirmation(text: str) -> bool:
+    normalized = " ".join((text or "").split()).casefold().rstrip(".!")
+    return normalized == "conversa reiniciada"
+
+
 def log(line: str) -> None:
     logger.info(_strip_html(line))
     _session_log.append(line)
@@ -135,6 +141,11 @@ async def _process_message(msg: dict) -> None:
         _save_session_log(phone)
         return
 
+    if from_me and msg_type in TEXT_TYPES and _is_reset_confirmation(msg_text):
+        logger.info("Eco de confirmacao de reset ignorado para %s", phone)
+        _save_session_log(phone)
+        return
+
     if from_me:
         await rds.set_block(phone)
         log(_warn(f"[{phone}] humano assumiu — agente bloqueado por 1h"))
@@ -142,9 +153,12 @@ async def _process_message(msg: dict) -> None:
         return
 
     if await rds.is_blocked(phone):
-        log(_warn(f"[{phone}] agente bloqueado (humano ativo) — ignorando"))
-        _save_session_log(phone)
-        return
+        if await rds.clear_stale_legacy_block(phone):
+            log(_warn(f"[{phone}] bloqueio legado vazio removido"))
+        else:
+            log(_warn(f"[{phone}] agente bloqueado (humano ativo) — ignorando"))
+            _save_session_log(phone)
+            return
 
     if _is_group(chat_id):
         log(_warn(f"[{phone}] ignorado (grupo): chat_id={chat_id!r}"))
