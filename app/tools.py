@@ -709,7 +709,7 @@ _INFO_PLANOS = {
         "PLANO FAMILIAR:\n"
         "- 10% de desconto no plano semestral para pessoas da mesma família "
         "(ex: mãe e filho, marido e esposa) ou que compartilham a mesma renda.\n"
-        "- Com desconto chega a ~R$ 87,92/mês."
+        "- Base: R$ 109,90/mês. Com 10% de desconto: ~R$ 98,91/mês."
     ),
     "avulsas": (
         "PACOTE DE AULAS AVULSAS (check-ins extras):\n"
