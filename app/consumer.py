@@ -47,6 +47,7 @@ def _ai(t: str) -> str: return f'<span style="color:#9b59b6"><b>🤖 IA</b></spa
 def _ok(t: str) -> str: return f'<span style="color:#27ae60"><b>✅ OK</b></span> {t}'
 def _warn(t: str) -> str: return f'<span style="color:#e67e22"><b>⚠️</b></span> {t}'
 def _err(t: str) -> str: return f'<span style="color:#e74c3c"><b>❌</b></span> {t}'
+def _human(origem: str, t: str) -> str: return f'<span style="color:#16a085"><b>🧑‍💼 ATENDENTE HUMANO - {origem}</b></span> {t}'
 
 
 def _strip_html(t: str) -> str:
@@ -148,7 +149,13 @@ async def _process_message(msg: dict) -> None:
 
     if from_me:
         await rds.set_block(phone)
-        log(_warn(f"[{phone}] humano assumiu — agente bloqueado por 1h"))
+        # Origem: painel SAI envia via API (wasSentByApi=true); WhatsApp do
+        # celular/Web nao seta a flag.
+        raw = msg.get("raw_message") or {}
+        via_painel = bool(raw.get("wasSentByApi"))
+        origem = "Painel SAI" if via_painel else "WhatsApp"
+        log(_human(origem, f"[{phone}] agente bloqueado ate amanha 08:00 SP"))
+        logger.info("Humano assumiu chat %s via %s - agente bloqueado ate amanha 08:00 SP", chat_id, origem)
         _save_session_log(phone)
         return
 

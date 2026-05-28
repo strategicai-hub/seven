@@ -32,23 +32,33 @@ def _json_body(payload: dict) -> bytes:
 
 async def send_text(number: str, text: str, delay: int = 4000) -> dict:
     url = f"{settings.UAZAPI_BASE_URL}/send/text"
-    payload = {"number": number, "text": text, "delay": delay}
+    payload = {"number": number, "text": text, "delay": delay, "track_source": TRACK_SOURCE}
     await rds.mark_outbound_echo(number, text)
     client = _get_client()
     resp = await client.post(url, content=_json_body(payload), headers=_headers())
     resp.raise_for_status()
+    data = resp.json()
+    await _remember_outbound(data)
     logger.info("Texto enviado para %s", number)
-    return resp.json()
+    return data
 
 
 async def _send_media(number: str, media_type: str, file_url: str, delay: int = 4000) -> dict:
     url = f"{settings.UAZAPI_BASE_URL}/send/media"
-    payload = {"number": number, "type": media_type, "file": file_url, "delay": delay}
+    payload = {
+        "number": number,
+        "type": media_type,
+        "file": file_url,
+        "delay": delay,
+        "track_source": TRACK_SOURCE,
+    }
     client = _get_client()
     resp = await client.post(url, content=_json_body(payload), headers=_headers())
     resp.raise_for_status()
+    data = resp.json()
+    await _remember_outbound(data)
     logger.info("%s enviado para %s", media_type, number)
-    return resp.json()
+    return data
 
 
 async def send_image(number: str, image_url: str, caption: str = "") -> dict:

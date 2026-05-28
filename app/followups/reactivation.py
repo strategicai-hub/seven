@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from app import db
 from app.config import settings
-from app.services import uazapi
+from app.services import redis_service as rds, uazapi
 from app.services.gemini import generate_reactivation_message
 
 logger = logging.getLogger("followup.reactivation")

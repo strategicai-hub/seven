@@ -87,6 +87,31 @@ async def consume_outbound_echo(phone: str, text: str) -> bool:
     deleted = await r.delete(_outbound_echo_key(phone, _outbound_digest(text)))
     return deleted == 1
 
+
+def _outbound_id_key(msg_id: str) -> str:
+    # Global (id de mensagem ja e unico) — marca ecos do proprio bot por id exato.
+    return f"seven:outbound-id:{msg_id}"
+
+
+async def mark_outbound_id(msg_id: str, ttl: int = 600) -> None:
+    """Registra o id de uma mensagem enviada pelo proprio bot.
+
+    Permite reconhecer o eco dessa mensagem (reenviado pelo SAI Comercial) por
+    id exato, sem depender de track_source/texto.
+    """
+    if not msg_id:
+        return
+    r = await get_redis()
+    await r.set(_outbound_id_key(msg_id), "1", ex=ttl)
+
+
+async def is_outbound_id(msg_id: str) -> bool:
+    if not msg_id:
+        return False
+    r = await get_redis()
+    return await r.exists(_outbound_id_key(msg_id)) == 1
+
+
 # ---- buffer de mensagens (debounce) ----
 
 def _buffer_key(phone: str) -> str:
