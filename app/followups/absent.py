@@ -176,7 +176,21 @@ async def _send_one(member_info: tuple[dict, int]) -> None:
         return
 
     flag_key = f"absent:sent:{mid}"
-    if await rds.has_flag(flag_key):
+
+    if settings.FOLLOWUP_DRY_RUN:
+        if await rds.has_flag(flag_key):
+            logger.info("[%s] memberid=%s dedup ativo, pulando", phone, mid)
+            return
+        text = await _generate_message(nome, dias)
+        if not text:
+            text = _fallback_message(nome)
+            logger.warning("[%s] fallback de mensagem (Gemini falhou)", phone)
+        logger.info("[DRY_RUN][%s] memberid=%s dias=%d msg=%r", phone, mid, dias, text[:160])
+        return  # NÃO marca flag em dry-run — permite múltiplos testes
+
+    # SETNX atomico: claim antes do trabalho caro. Impede race entre 2
+    # schedulers concorrentes (rolling update) processando o mesmo memberid.
+    if not await rds.try_set_flag_nx(flag_key, ttl=DEDUP_TTL_SECONDS):
         logger.info("[%s] memberid=%s dedup ativo, pulando", phone, mid)
         return
 
@@ -185,17 +199,13 @@ async def _send_one(member_info: tuple[dict, int]) -> None:
         text = _fallback_message(nome)
         logger.warning("[%s] fallback de mensagem (Gemini falhou)", phone)
 
-    if settings.FOLLOWUP_DRY_RUN:
-        logger.info("[DRY_RUN][%s] memberid=%s dias=%d msg=%r", phone, mid, dias, text[:160])
-        return  # NÃO marca flag em dry-run — permite múltiplos testes
-
     try:
         await uazapi.send_text(phone, text)
     except Exception as e:
         logger.exception("[%s] falha ao enviar absent: %s", phone, e)
+        # Rollback da flag para permitir nova tentativa no proximo ciclo.
+        await rds.clear_flag(flag_key)
         return
-
-    await rds.set_flag(flag_key, ttl=DEDUP_TTL_SECONDS)
 
 
 # ---------------- job principal ----------------

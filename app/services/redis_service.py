@@ -223,6 +223,23 @@ async def has_flag(key: str) -> bool:
     return await r.exists(key) == 1
 
 
+async def try_set_flag_nx(key: str, ttl: int) -> bool:
+    """SETNX atomico: marca a flag se nao existir, retorna True se conseguiu
+    setar agora ou False se ja existia. Substitui o padrao race-y
+    has_flag+set_flag — use antes do trabalho caro (Gemini, send) para
+    impedir que duas execucoes concorrentes (rolling update do scheduler)
+    despachem o mesmo follow-up. Em caso de falha de envio, chamar
+    clear_flag para permitir nova tentativa."""
+    r = await get_redis()
+    ok = await r.set(key, "1", nx=True, ex=ttl)
+    return bool(ok)
+
+
+async def clear_flag(key: str) -> None:
+    r = await get_redis()
+    await r.delete(key)
+
+
 # ---- cache de token (CloudGym) ----
 
 async def cache_get(key: str) -> str | None:

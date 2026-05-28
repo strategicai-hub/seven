@@ -32,20 +32,23 @@ async def _send_birthday(ctx: tuple[dict, str]) -> None:
         return
 
     flag_key = f"aniv_seven:{phone}"
-    if await rds.has_flag(flag_key):
-        return
 
     if settings.FOLLOWUP_DRY_RUN:
+        if await rds.has_flag(flag_key):
+            return
         logger.info("[DRY_RUN][%s] envio de imagem de aniversário", phone)
+        return
+
+    # SETNX atomico antes do envio: impede race entre 2 schedulers concorrentes.
+    if not await rds.try_set_flag_nx(flag_key, ttl=26 * 3600):
         return
 
     try:
         await uazapi.send_image(phone, image_url)
     except Exception as e:
         logger.exception("[%s] falha ao enviar imagem: %s", phone, e)
+        await rds.clear_flag(flag_key)
         return
-
-    await rds.set_flag(flag_key, ttl=26 * 3600)
 
 
 async def run() -> None:

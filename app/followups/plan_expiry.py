@@ -48,23 +48,26 @@ async def _send_reminder(item: tuple[dict, int]) -> None:
         return
 
     flag_key = f"lembrete_seven:{phone}"
-    if await rds.has_flag(flag_key):
-        logger.info("[%s] flag ativa, pulando", phone)
-        return
-
     text = _pick_template(member, days)
 
     if settings.FOLLOWUP_DRY_RUN:
+        if await rds.has_flag(flag_key):
+            logger.info("[%s] flag ativa, pulando", phone)
+            return
         logger.info("[DRY_RUN][%s] %dd -> %s", phone, days, text[:120])
+        return
+
+    # SETNX atomico antes do envio: impede race entre 2 schedulers concorrentes.
+    if not await rds.try_set_flag_nx(flag_key, ttl=3 * 3600):
+        logger.info("[%s] flag ativa, pulando", phone)
         return
 
     try:
         await uazapi.send_text(phone, text)
     except Exception as e:
         logger.exception("[%s] falha no envio: %s", phone, e)
+        await rds.clear_flag(flag_key)
         return
-
-    await rds.set_flag(flag_key, ttl=3 * 3600)
 
 
 async def run() -> None:

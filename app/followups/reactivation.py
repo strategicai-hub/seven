@@ -41,15 +41,31 @@ async def run() -> None:
             await db.mark_finalizado(phone)
             continue
 
+        # SETNX atomico: claim antes do Gemini. Como o job roda a cada 1 min,
+        # qualquer overlap entre execucoes (rolling update) podia gerar 2
+        # envios identicos pro mesmo lead. TTL=3600s cobre o pior cenario.
+        lock_key = f"reactivation:lock:{phone}"
+        if not await rds.try_set_flag_nx(lock_key, ttl=3600):
+            logger.info("[%s] reactivation ja em andamento, pulando", phone)
+            continue
+
         now_str = now_tz.strftime("%A, %d/%m/%Y %H:%M")
         try:
             msg = await generate_reactivation_message(phone, nome, stage, now_str)
         except Exception as e:
             logger.warning("[%s] falha no Gemini: %s", phone, e)
+            # Adia 1h em vez de cair em 'continue' (que deixaria o lead em
+            # loop a cada 1min ate Gemini voltar).
+            retry_iso = (now_tz + timedelta(hours=1)).astimezone(timezone.utc).isoformat()
+            await db.schedule_followup(phone, next_follow_up_iso=retry_iso, stage=stage)
+            await rds.clear_flag(lock_key)
             continue
 
         if not msg:
             logger.info("[%s] mensagem vazia (stage=%d), pulando", phone, stage)
+            retry_iso = (now_tz + timedelta(hours=1)).astimezone(timezone.utc).isoformat()
+            await db.schedule_followup(phone, next_follow_up_iso=retry_iso, stage=stage)
+            await rds.clear_flag(lock_key)
             continue
 
         if settings.FOLLOWUP_DRY_RUN:
@@ -59,6 +75,10 @@ async def run() -> None:
                 await uazapi.send_text(phone, msg)
             except Exception as e:
                 logger.exception("[%s] falha ao enviar reativação: %s", phone, e)
+                # Adia 1h para nao bombardear o uazapi a cada 1 min.
+                retry_iso = (now_tz + timedelta(hours=1)).astimezone(timezone.utc).isoformat()
+                await db.schedule_followup(phone, next_follow_up_iso=retry_iso, stage=stage)
+                await rds.clear_flag(lock_key)
                 continue
 
         # Avança estágio
@@ -69,4 +89,5 @@ async def run() -> None:
             next_iso = (now_tz + timedelta(days=1)).astimezone(timezone.utc).isoformat()
 
         await db.advance_followup_stage(phone, new_stage, next_iso, finalize)
+        await rds.clear_flag(lock_key)
         logger.info("[%s] stage %d -> %d (finalize=%s)", phone, stage, new_stage, finalize)
