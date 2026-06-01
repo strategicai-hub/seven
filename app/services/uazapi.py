@@ -9,6 +9,8 @@ from app.services import redis_service as rds
 
 logger = logging.getLogger(__name__)
 
+TRACK_SOURCE = "IA"
+
 _client: httpx.AsyncClient | None = None
 
 
@@ -28,6 +30,11 @@ def _headers() -> dict:
 
 def _json_body(payload: dict) -> bytes:
     return _json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+
+async def _remember_outbound(data: dict) -> None:
+    msg_id = data.get("id") or data.get("messageid") or ""
+    await rds.mark_outbound_id(msg_id)
 
 
 async def send_text(number: str, text: str, delay: int = 4000) -> dict:
