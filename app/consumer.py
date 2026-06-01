@@ -172,6 +172,9 @@ async def _process_message(msg: dict) -> None:
         _save_session_log(phone)
         return
 
+    # Mensagem inbound valida confirmada — marca como lida (tiques azuis).
+    await uazapi.mark_read(phone)
+
     # Comando /reset — precedência MÁXIMA (roda antes de modo_mudo para
     # garantir que seja sempre possível sair de um atendimento humano).
     # Apaga TUDO relacionado ao número: histórico, buffer, bloqueio humano,
@@ -279,6 +282,9 @@ async def _process_message(msg: dict) -> None:
         _save_session_log(phone)
         return
 
+    # Emite "digitando..." antes de iniciar o processamento com a IA.
+    await uazapi.send_presence(phone, "composing")
+
     # Chamada ao Gemini com function calling
     log(f"[GEMINI] chat_with_tools(phone={phone}, msg_len={len(unified_msg)})")
     try:
@@ -362,6 +368,9 @@ async def _process_message(msg: dict) -> None:
     for i, part in enumerate(parts):
         try:
             if part["type"] == "text":
+                # "digitando..." antes de cada bloco de texto, com pausa curta.
+                await uazapi.send_presence(phone, "composing")
+                await asyncio.sleep(1.5)
                 await uazapi.send_text(phone, part["content"])
             elif part["type"] == "image":
                 await uazapi.send_image(phone, part["content"])
