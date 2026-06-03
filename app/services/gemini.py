@@ -23,6 +23,7 @@ from google.genai import types as gtypes
 
 from app.config import settings
 from app.prompt import build_system_prompt
+from app.services import sai_sync
 from app.services.redis_service import append_chat_history, get_chat_history
 from app.tools import ALL_TOOLS, dispatch
 
@@ -52,6 +53,51 @@ def _time_header() -> str:
         "- Escolher a saudação: 'bom dia' (05:00–11:59), 'boa tarde' (12:00–17:59), "
         "'boa noite' (18:00–23:59 e madrugada).\n"
         "- Calcular datas relativas (hoje, amanhã, próxima sexta, etc.).\n"
+    )
+
+
+def _closed_days_header(horizon_days: int = 90) -> str:
+    """Bloco de DATAS FECHADAS (feriados/recessos do painel SAI Comercial).
+
+    Le do snapshot em Redis (sai_sync.load_snapshot_sync). Sem snapshot/
+    holidays => string vazia (cache implicito do Gemini permanece valido).
+    """
+    snap = sai_sync.load_snapshot_sync()
+    if not snap:
+        return ""
+    holidays = ((snap.get("assistant") or {}).get("holidays") or [])
+    if not holidays:
+        return ""
+    today = _current_time_sp().date()
+    from datetime import date as _date, timedelta as _td
+    def _parse(v):
+        try: return _date.fromisoformat((v or "")[:10])
+        except (TypeError, ValueError): return None
+    horizon = today + _td(days=horizon_days)
+    lines: list[str] = []
+    for h in holidays:
+        start = _parse(h.get("startDate"))
+        end = _parse(h.get("endDate") or h.get("startDate"))
+        if start is None or end is None: continue
+        if end < today or start > horizon: continue
+        reason = (h.get("reason") or "").strip()
+        if start == end:
+            label = start.strftime("%d/%m/%Y")
+        else:
+            label = f"{start.strftime('%d/%m/%Y')} a {end.strftime('%d/%m/%Y')}"
+        lines.append(f"  - {label}" + (f" — {reason}" if reason else ""))
+    if not lines:
+        return ""
+    return (
+        "\n\n---\n\n## 🚫 DATAS FECHADAS — REGRA ABSOLUTA\n"
+        "Nas datas listadas abaixo a academia **NAO abre** (feriado/recesso "
+        "cadastrado no painel). PROIBIDO oferecer ou confirmar agendamento de "
+        "aula experimental nessas datas — mesmo que normalmente haja aula naquele "
+        "dia da semana. Se o lead perguntar se vai abrir, responda que estaremos "
+        "fechados, cite o motivo se houver, e ofereca o proximo dia util "
+        "compativel com a modalidade.\n\n"
+        + "\n".join(lines)
+        + "\n"
     )
 
 
@@ -332,6 +378,7 @@ async def chat_with_tools(phone: str, user_message: str, lead_name: str = "",
         build_system_prompt(user_message)
         + _time_header()
         + _lead_header(lead_name)
+        + _closed_days_header()
     )
     config = gtypes.GenerateContentConfig(
         system_instruction=system_instruction,

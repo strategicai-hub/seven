@@ -78,6 +78,20 @@ class Settings(BaseSettings):
     SCHEDULER_TZ: str = "America/Sao_Paulo"
     FOLLOWUP_DRY_RUN: int = 0
 
+    # Alias necessario para sai_sync._binding_key (que usa PROJECT_SLUG como fallback)
+    PROJECT_SLUG: str = "seven"
+
+    # Sincronizacao com o Painel IA WhatsApp (SAI Comercial)
+    SAI_BASE_URL: str = "https://comercial.strategicai.com.br"
+    SAI_TENANT_SLUG: str = ""
+    SAI_INGEST_SECRET: str = ""
+
+    # Auto-registro do chatbot no catalogo do SAI.
+    SAI_CHATBOT_SLUG: str = ""
+    SAI_CHATBOT_NAME: str = ""
+    SAI_CHATBOT_PUBLIC_URL: str = ""
+    SAI_REGISTRATION_TOKEN: str = ""
+
     @property
     def allowed_phones_list(self) -> list[str]:
         return [p.strip() for p in self.ALLOWED_PHONES.split(",") if p.strip()]

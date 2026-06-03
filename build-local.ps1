@@ -92,6 +92,16 @@ Write-Host "=== [3/4] Deploy via Portainer ===" -ForegroundColor Cyan
 $baseUrl = $PORTAINER_URL.TrimEnd("/")
 $headers = @{ "X-API-Key" = $PORTAINER_TOKEN; "Content-Type" = "application/json" }
 
+# X-Registry-Auth: sem isso o Swarm faz `No such image` ao puxar do GHCR privado.
+# Base64 PADRAO (nao urlsafe — docker rejeita urlsafe com "Illegal base64 data").
+$regAuthJson = @{ username = $GHCR_USER; password = $GHCR_TOKEN; serveraddress = "ghcr.io" } | ConvertTo-Json -Compress
+$regAuthB64  = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($regAuthJson))
+$headersAuth = @{
+    "X-API-Key"        = $PORTAINER_TOKEN
+    "Content-Type"     = "application/json"
+    "X-Registry-Auth"  = $regAuthB64
+}
+
 foreach ($svcName in $SERVICES) {
     Write-Host "  Atualizando $svcName..."
     $svcResp = Invoke-RestMethod -Uri "$baseUrl/api/endpoints/1/docker/services/$svcName" -Headers $headers -Method Get
@@ -102,7 +112,7 @@ foreach ($svcName in $SERVICES) {
     $spec.TaskTemplate.ForceUpdate = $fu + 1
     $body = $spec | ConvertTo-Json -Depth 20
     Invoke-RestMethod -Uri "$baseUrl/api/endpoints/1/docker/services/$svcName/update?version=$version" `
-        -Headers $headers -Method Post -Body $body | Out-Null
+        -Headers $headersAuth -Method Post -Body $body | Out-Null
     Write-Host "  OK: $svcName -> $IMAGE_REF" -ForegroundColor Green
 }
 
