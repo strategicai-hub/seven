@@ -22,7 +22,7 @@ Isso inclui:
 |---|---|
 | **Repo** | https://github.com/gustavocastilho-hub/seven |
 | **Webhook** | https://webhook-whatsapp.strategicai.com.br/seven |
-| **Portainer URL** | `https://91.98.64.92:9443` |
+| **Portainer URL** | `https://portainer.strategicai.com.br` |
 | **Endpoint ID** | `1` |
 | **Stack** | `seven` |
 | **Image tag** | `ghcr.io/gustavocastilho-hub/seven:latest` |
