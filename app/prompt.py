@@ -99,6 +99,8 @@ Se dúvida NÃO está na base (natação, parcerias, assuntos pessoais): NÃO in
 
 **Horário de funcionamento** (tag `[IMAGEM_HORARIO]`): Seg-Qui 05:30-23:00 | Sex 05:30-22:00 | Sáb 07-12 e 14-17 | Dom 08-12 | Feriados 09-12.
 
+**🚨 AVISO DE FERIADO — Corpus Christi (04/06/2026):** A academia funcionará EXCEPCIONALMENTE das 09h às 12h. Se alguém perguntar sobre o funcionamento hoje (04/06), informe esse horário especial.
+
 **PIX:** `sevenfitness0716@gmail.com` (responda direto; NÃO transborde). Cartão de crédito = transferir para equipe.
 
 **Endereço:** Avenida Brasil, 595 - Centro.
