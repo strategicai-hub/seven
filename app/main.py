@@ -4,7 +4,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+from app.config import settings
 from app.webhook import router
 from app.api import router as api_router
 from app.api_sai import router as sai_router
@@ -38,6 +40,14 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Imagens da academia servidas localmente da pasta app/media:
+# https://webhook-whatsapp.strategicai.com.br/{slug}/media/<arquivo>
+app.mount(
+    f"/{settings.CLIENT_SLUG}/media",
+    StaticFiles(directory="app/media"),
+    name="media",
 )
 
 app.include_router(router)

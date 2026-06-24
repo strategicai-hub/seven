@@ -55,6 +55,9 @@ class Settings(BaseSettings):
 
     # App
     WEBHOOK_PATH: str = "/seven"
+    # Base publica para servir imagens da pasta app/media via StaticFiles
+    # (montado em /{CLIENT_SLUG}/media). Substitui os links antigos do Wix.
+    MEDIA_BASE_URL: str = "https://webhook-whatsapp.strategicai.com.br/seven"
     DEBOUNCE_SECONDS: int = 30
     BLOCK_TTL_SECONDS: int | None = None  # deprecated: TTL agora é calculado dinamicamente até amanhã 08:00 SP
 
