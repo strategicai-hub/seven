@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # Google Gemini
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash"
     # Modelo usado quando o primário esgota tentativas por sobrecarga (503/429).
     # Deve aceitar o mesmo contrato (function calling + system_instruction).
     GEMINI_FALLBACK_MODEL: str = "gemini-flash-latest"
