@@ -154,6 +154,21 @@ async def _process_message(msg: dict) -> None:
         raw = msg.get("raw_message") or {}
         via_painel = bool(raw.get("wasSentByApi"))
         origem = "Painel SAI" if via_painel else "WhatsApp"
+        # Grava a mensagem da atendente no historico do Gemini (role "model",
+        # como se o bot tivesse dito). Sem isso a Zoe retoma a conversa sem
+        # saber o que a humana falou e se reapresenta do zero ao ser liberada.
+        # Ecos da propria IA nao chegam aqui — o webhook ja filtra por
+        # track_source e por id outbound registrado no envio.
+        if msg_type in TEXT_TYPES and msg_text:
+            await rds.append_chat_history(phone, "model", msg_text)
+        elif msg_type == "AudioMessage":
+            await rds.append_chat_history(phone, "model", "[Audio enviado pelo atendente humano]")
+        elif msg_type == "ImageMessage":
+            caption = msg.get("caption", "")
+            texto = "[Imagem enviada pelo atendente humano]"
+            if caption:
+                texto += f" Legenda: {caption}"
+            await rds.append_chat_history(phone, "model", texto)
         log(_human(origem, f"[{phone}] agente bloqueado ate amanha 08:00 SP"))
         logger.info("Humano assumiu chat %s via %s - agente bloqueado ate amanha 08:00 SP", chat_id, origem)
         _save_session_log(phone)
@@ -163,7 +178,20 @@ async def _process_message(msg: dict) -> None:
         if await rds.clear_stale_legacy_block(phone):
             log(_warn(f"[{phone}] bloqueio legado vazio removido"))
         else:
-            log(_warn(f"[{phone}] agente bloqueado (humano ativo) — ignorando"))
+            # Acumula a mensagem do lead no historico mesmo com o bot calado —
+            # quando a Zoe for liberada, retoma com o contexto completo do
+            # atendimento humano em vez de um buraco na conversa.
+            if msg_type in TEXT_TYPES and msg_text:
+                await rds.append_chat_history(phone, "user", msg_text)
+            elif msg_type == "AudioMessage":
+                await rds.append_chat_history(phone, "user", "[Audio recebido durante atendimento humano]")
+            elif msg_type == "ImageMessage":
+                caption = msg.get("caption", "")
+                texto = "[Imagem recebida durante atendimento humano]"
+                if caption:
+                    texto += f" Legenda: {caption}"
+                await rds.append_chat_history(phone, "user", texto)
+            log(_warn(f"[{phone}] agente bloqueado (humano ativo) — msg registrada no historico"))
             _save_session_log(phone)
             return
 
