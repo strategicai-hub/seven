@@ -386,8 +386,6 @@ async def chat_with_tools(phone: str, user_message: str, lead_name: str = "",
         temperature=0.4,
     )
 
-    await append_chat_history(phone, "user", user_message)
-
     final_text = ""
     tokens_acc = [0, 0, 0]
     pending_text: list[str] = []
@@ -471,6 +469,9 @@ async def chat_with_tools(phone: str, user_message: str, lead_name: str = "",
         final_text = _hardcoded_fallback(user_message)
 
     if final_text:
+        # Grava a fala do usuário só quando há resposta: evita duplicar no Redis
+        # se o consumer re-executar em retry. No happy-path o resultado é idêntico.
+        await append_chat_history(phone, "user", user_message)
         await append_chat_history(phone, "model", final_text)
 
     return final_text, (tokens_acc[0], tokens_acc[1], tokens_acc[2])

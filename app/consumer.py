@@ -434,15 +434,18 @@ async def _process_message(msg: dict) -> None:
         except Exception as e:
             log(_warn(f"[{phone}] falha ao reagendar follow-up: {e}"))
 
-    await _update_summary_and_sheets(phone, lead.get("nome") or push_name)
+    conversa_encerrada = finalizado or await db.is_modo_mudo(phone)
+    await _update_summary_and_sheets(phone, lead.get("nome") or push_name, conversa_encerrada)
     _save_session_log(phone)
 
 
-async def _update_summary_and_sheets(phone: str, name: str | None) -> None:
-    try:
-        resumo = await generate_summary(phone)
-    except Exception:
-        resumo = ""
+async def _update_summary_and_sheets(phone: str, name: str | None, gerar_resumo: bool = False) -> None:
+    resumo = ""
+    if gerar_resumo:
+        try:
+            resumo = await generate_summary(phone)
+        except Exception:
+            resumo = ""
     try:
         sheets_service.upsert_lead(phone=phone, name=name or "", resumo=resumo or "")
     except Exception:
