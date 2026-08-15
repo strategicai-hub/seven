@@ -18,7 +18,7 @@ from app import db
 from app.config import settings
 from app.images import MEDIA_DICT
 from app.services import redis_service as rds
-from app.services import sheets_service, uazapi
+from app.services import sheets_service, telegram, uazapi
 from app.services.gemini import (
     analyze_image,
     chat_with_tools,
@@ -408,7 +408,17 @@ async def _process_message(msg: dict) -> None:
             elif part["type"] == "video":
                 await uazapi.send_video(phone, part["content"])
         except Exception as e:
-            log(_err(f"[WHATSAPP] falha ao enviar {part['type']} ({i+1}/{len(parts)}): {e}"))
+            # uazapi ja tentou reenviar (backoff 2s/5s/12s). Se chegou aqui, o
+            # canal esta fora mesmo. Seguir para os baloes seguintes entregaria
+            # a resposta picada e fora de ordem — melhor parar e avisar a equipe.
+            faltando = len(parts) - i
+            log(_err(
+                f"[WHATSAPP] falha ao enviar {part['type']} ({i+1}/{len(parts)}): {e}. "
+                f"Abortando o restante da resposta ({faltando} parte(s) nao entregue(s))."
+            ))
+            logger.exception("Erro ao enviar %s para %s", part["type"], phone)
+            await _alert_delivery_failure(phone, i + 1, len(parts), parts, e)
+            break
 
     if pensar_days and pensar_days > 0:
         # [PENSAR=N] — lead reafirmou que precisa de tempo. Não finaliza:
@@ -437,6 +447,42 @@ async def _process_message(msg: dict) -> None:
     conversa_encerrada = finalizado or await db.is_modo_mudo(phone)
     await _update_summary_and_sheets(phone, lead.get("nome") or push_name, conversa_encerrada)
     _save_session_log(phone)
+
+
+async def _alert_delivery_failure(
+    phone: str,
+    parte: int,
+    total: int,
+    parts: list,
+    erro: Exception,
+) -> None:
+    """Avisa a equipe que um lead ficou sem resposta por falha de entrega.
+
+    Vai por Telegram (canal independente — funciona mesmo com o WhatsApp fora)
+    e tambem por WhatsApp, que so chega em falha parcial. O log em ERROR vem
+    primeiro para o caso de nenhum dos dois canais estar configurado.
+    """
+    nao_entregue = " | ".join(
+        str(p.get("content", ""))[:160] for p in parts[parte - 1:] if p.get("type") == "text"
+    )
+    logger.error(
+        "ENTREGA FALHOU: lead %s recebeu %d de %d parte(s). Nao entregue: %s",
+        phone, parte - 1, total, nao_entregue[:500],
+    )
+    alert_text = (
+        "⚠️ RESPOSTA NAO ENTREGUE\n"
+        f"WhatsApp: {phone}\n"
+        f"Entregue: {parte - 1} de {total} mensagem(ns)\n"
+        f"Erro: {str(erro)[:180]}\n\n"
+        "O lead ficou sem resposta completa — assumir a conversa manualmente."
+    )
+    await telegram.send_alert(alert_text)
+    if not settings.ALERT_PHONE:
+        return
+    try:
+        await uazapi.send_text(settings.ALERT_PHONE, alert_text)
+    except Exception as alert_error:  # noqa: BLE001
+        logger.warning("Nao foi possivel avisar a equipe por WhatsApp: %s", alert_error)
 
 
 async def _update_summary_and_sheets(phone: str, name: str | None, gerar_resumo: bool = False) -> None:

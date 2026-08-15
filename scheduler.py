@@ -16,7 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.config import settings
 from app.db import init_db
-from app.followups import reactivation, plan_expiry, birthday, post_trial, absent
+from app.followups import absent, birthday, connection_watch, plan_expiry, post_trial, reactivation
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,6 +66,19 @@ async def main() -> None:
         max_instances=1,
         coalesce=True,
     )
+
+    # Vigia de conexao: independe de client.yaml e roda 24/7 de proposito — o
+    # WhatsApp cai a qualquer hora e a queda so e detectavel por polling.
+    if settings.CONNECTION_WATCH_ENABLED:
+        watch_min = max(int(settings.CONNECTION_WATCH_MINUTES), 1)
+        scheduler.add_job(
+            connection_watch.run,
+            CronTrigger(minute=f"*/{watch_min}" if watch_min > 1 else "*", timezone=tz),
+            id="connection_watch",
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info("job connection_watch: cadencia %d min", watch_min)
 
     scheduler.start()
     logger.info("Scheduler iniciado (tz=%s). Jobs: %s", tz, [j.id for j in scheduler.get_jobs()])
